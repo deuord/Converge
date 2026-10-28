@@ -1,0 +1,23 @@
+# 模型配置示例:复制为 config/models.yaml 按需修改(该文件含 key 引用,已被 git 忽略)
+# 字段说明:
+#   name:        模型别名,API 里 model 参数用它(和真实模型名解耦,用户可自起名)
+#   provider:    标识字段,当前不参与请求逻辑
+#   api_key:     ${VAR} 从 .env 读,不要在这里写明文 key
+#   base_url:    OpenAI 兼容服务地址(火山引擎/DeepSeek/通义等各家的 v1 地址)
+#   model:       发给上游的真实模型名
+#   max_tokens:  可省略,省略用上游默认;reasoning 模型注意它限制思考预算
+
+default: mimo-v2.6-flash
+
+models:
+  - name: mimo-v2.6-flash
+    provider: mimo
+    api_key: ${MIMO_API_KEY}
+    base_url: https://api.xiaomimimo.com/v1
+    model: mimo-v2.6-flash
+
+  - name: deepseek-chat
+    provider: deepseek
+    api_key: ${DEEPSEEK_API_KEY}
+    base_url: https://api.deepseek.com/v1
+    model: deepseek-chat
