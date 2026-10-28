@@ -1,0 +1,21 @@
+[project]
+name = "converge"
+version = "0.1.0"
+description = "Lightweight desktop task agent: streaming LLM chat with multi-turn memory, built on a transport-agnostic runner (FastAPI + SSE + PostgreSQL)"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "alembic>=1.20.0",
+    "fastapi>=0.162.0",
+    "openai>=3.14.0",
+    "psycopg[binary]>=3.3.6",
+    "pydantic-settings>=2.16.1",
+    "pyyaml>=6.0.3",
+    "sqlalchemy>=2.1.5",
+    "uvicorn>=0.54.0",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.17.3",
+]
