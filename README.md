@@ -47,9 +47,9 @@ uv sync
 docker compose up -d
 uv run alembic upgrade head
 
-# 3. 配置模型：复制 .env.example 为 .env，填入真实 key
+# 3. 配置模型：复制 .env / models.example.yaml 为 .env / config/models.yaml，填入真实 key
 cp .env.example .env
-#    再按需编辑 config/models.yaml（默认模型、可选模型列表）
+cp config/models.example.yaml config/models.yaml
 
 # 4. 启动服务
 uv run uvicorn main:app --reload
