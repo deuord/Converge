@@ -26,7 +26,11 @@ async def chat_stream(messages, model=None, tools=None):
     # 每次调用新建 client 是最简单的写法;生产上常见做法是模块级复用一个 client,
     # 复用底层连接池(TCP/TLS 握手只做一次),这是后续可做的小优化
     mcfg = get_settings().get_model(model)
-    client = AsyncOpenAI(api_key=mcfg.api_key, base_url=mcfg.base_url)
+    # 重试/超时显式化(plan §1.2):429/5xx/连接错指数退避重试 3 次,400/401/403 等
+    # 4xx 不重试(重试也没用);超时 120s,防上游假死把请求挂住
+    client = AsyncOpenAI(
+        api_key=mcfg.api_key, base_url=mcfg.base_url, max_retries=3, timeout=120.0
+    )
 
     # ---------------- create:对应 POST /v1/chat/completions 的请求体 ----------------
     # 常用参数(v1.0 用到的 + 之后会用到的,都在这认识一遍):

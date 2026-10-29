@@ -3,12 +3,16 @@
 # 断点续跑(resume_turn)、ReAct 工具循环随 v2.x 加;观测埋点(obs.log_event)v2.0 接入
 from collections.abc import AsyncIterator
 
+import structlog
 from sqlalchemy.orm import Session as DbSession
 
 from agent.events import ChunkEvent, DoneEvent, ErrorEvent, Event
 from agent.session import Session
+from common.response import CODE_LLM_ERROR
 from llm.openai_compat import chat_stream
 from store.session_store import SessionStore
+
+logger = structlog.get_logger(__name__)
 
 
 async def run_turn(
@@ -42,10 +46,17 @@ async def run_turn(
                     content += delta.content
                     yield ChunkEvent(content=delta.content)
             completed = True
-        except Exception as e:  # noqa: BLE001 — LLM 层可能抛任何异常(网络/SDK/限流),统一兜底转 error 事件
+        except Exception as e:  # LLM 层可能抛任何异常(网络/SDK/限流),统一兜底转 error 事件
             # 不回滚:用户消息和已生成的半截都留在历史里(见 plan §2.5),
             # 重发还是追问由用户决定,替他删消息反而会让历史"少一轮"
-            yield ErrorEvent(message=str(e))
+            logger.error(
+                "llm_stream_failed",
+                session_id=session.session_id,
+                model=model,
+                error=str(e),
+                exc_info=(type(e), e, e.__traceback__),
+            )
+            yield ErrorEvent(code=CODE_LLM_ERROR, message=str(e))
         finally:
             # 正常结束、报错、被外部掐断(前端断流 / Ctrl+C → GeneratorExit 不进
             # except,但一定进 finally)三条路都要落库已生成的正文:

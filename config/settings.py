@@ -29,6 +29,9 @@ class Settings(BaseSettings):
 
     default: str
     models: list[ModelConfig]
+    # 基础设施配置:.env / 环境变量可覆写,带默认值(本地 docker compose 那套)
+    database_url: str = "postgresql+psycopg://agent:agent123@localhost:5433/mini_agent"
+    log_level: str = "INFO"  # DEBUG / INFO / WARNING / ERROR
     # env 里的值(如 AGENT_MAX_STEPS)可覆写字段;extra="ignore" 忽略无关环境变量
     model_config = SettingsConfigDict(extra="ignore")
 

@@ -16,6 +16,7 @@ class DoneEvent(BaseModel):
 
 class ErrorEvent(BaseModel):
     type: Literal["error"] = "error"
+    code: int = 500  # 与统一返回 envelope 同一套错误码(取值见 common/response.py)
     message: str = ""
 
 
