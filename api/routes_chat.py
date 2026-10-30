@@ -28,8 +28,8 @@ class ChatRequest(BaseModel):
     model: str | None = None  # models.yaml 里的别名,None 用默认
 
 
-@router.post("/api/chat")
-def chat(req: ChatRequest, db: Annotated[Session, Depends(get_db)]):
+@router.post("/api/v1/chat")
+async def chat(req: ChatRequest, db: Annotated[Session, Depends(get_db)]):
     """SSE 流:data: 后跟一行 JSON(首帧 session、之后 chunk/error/done),done 后流结束"""
     return StreamingResponse(_stream(req, db), media_type="text/event-stream")
 

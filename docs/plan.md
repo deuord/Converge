@@ -344,14 +344,13 @@ CREATE TABLE recent_file (
     updated_user_nickname VARCHAR(64),                     -- 审计:哪个用户最后更新
     deleted_at TIMESTAMPTZ                                 -- 软删除:NULL=存活,非 NULL=已删除
 );
-CREATE INDEX idx_recent_file_accessed ON recent_file (accessed_at DESC);
+CREATE INDEX idx_recent_files_accessed ON recent_file (accessed_at DESC);
 
 CREATE TABLE session (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,  -- 技术主键,公司规范所有业务表必有
     session_id VARCHAR(24) NOT NULL UNIQUE,              -- 业务键,应用侧生成(uuid4().hex[:12]),暴露给前端/日志/API
     pending JSONB,                                       -- 回合断点(见 2.5 / 2.6),NULL = 无断点;整存整取,一个会话同时只有一份,留这里
     model VARCHAR(64),                                   -- 会话级模型切换(见 2.2)
-    expires_at TIMESTAMPTZ,                              -- TTL,惰性判定清理
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     created_user_nickname VARCHAR(64),                   -- 审计:哪个用户创建;单用户暂不填,公司规范必留
@@ -374,7 +373,7 @@ CREATE TABLE message (
     deleted_at TIMESTAMPTZ,                                 -- 软删除:NULL=存活,非 NULL=已删除
     UNIQUE(session_id, seq)                                 -- 防止同一会话内序号重复
 );
-CREATE INDEX idx_message_session_seq ON message (session_id, seq);   -- 拼 prompt 时 ORDER BY seq 走索引
+CREATE INDEX idx_messages_session_seq ON message (session_id, seq);   -- 拼 prompt 时 ORDER BY seq 走索引
 
 message.seq 生成策略(并发安全,应用层事务内完成):
   1. BEGIN;2. SELECT MAX(seq) + 1 FROM message WHERE session_id = ? FOR UPDATE;3. INSERT INTO message (session_id, seq, ...) VALUES (?, ?, ...);4. COMMIT;

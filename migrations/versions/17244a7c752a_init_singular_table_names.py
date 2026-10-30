@@ -27,7 +27,6 @@ def upgrade() -> None:
         sa.Column('session_id', sa.String(length=24), nullable=False, unique=True),
         sa.Column('pending', postgresql.JSONB(astext_type=sa.Text()), nullable=True),
         sa.Column('model', sa.String(length=64), nullable=True),
-        sa.Column('expires_at', sa.DateTime(timezone=True), nullable=True),
         sa.Column('created_at', sa.DateTime(timezone=True), nullable=False, comment='创建时间,UTC'),
         sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False, comment='更新时间,UTC'),
         sa.Column('created_user_nickname', sa.String(length=64), nullable=True, comment='创建用户昵称,用于审计/分析'),
@@ -55,11 +54,12 @@ def upgrade() -> None:
         sa.Column('deleted_at', sa.DateTime(timezone=True), nullable=True, comment='软删除时间,UTC;NULL=存活,非 NULL=已删除'),
         sa.ForeignKeyConstraint(['session_id'], ['session.session_id'], ondelete='CASCADE'),
         sa.PrimaryKeyConstraint('id'),
-        sa.UniqueConstraint('session_id', 'seq', name='uq_message_session_seq'),
+        sa.UniqueConstraint('session_id', 'seq', name='uq_messages_session_seq'),
     )
     op.execute("ALTER TABLE message ALTER COLUMN id DROP DEFAULT")
     op.execute("ALTER TABLE message ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY")
-    op.create_index('idx_message_session_seq', 'message', ['session_id', 'seq'], unique=False)
+    op.create_index('idx_messages_session_seq', 'message', ['session_id', 'seq'], unique=False)
+    op.create_index('ix_message_session_id', 'message', ['session_id'], unique=False)
 
     # recent_file(无外键依赖)
     op.create_table(
@@ -78,15 +78,16 @@ def upgrade() -> None:
     op.execute("ALTER TABLE recent_file ALTER COLUMN id DROP DEFAULT")
     op.execute("ALTER TABLE recent_file ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY")
     op.create_index(
-        'idx_recent_file_accessed', 'recent_file', ['accessed_at'],
+        'idx_recent_files_accessed', 'recent_file', ['accessed_at'],
         unique=False, postgresql_using='btree',
     )
 
 
 def downgrade() -> None:
     """Downgrade schema."""
-    op.drop_index('idx_message_session_seq', table_name='message')
+    op.drop_index('ix_message_session_id', table_name='message')
+    op.drop_index('idx_messages_session_seq', table_name='message')
     op.drop_table('message')
     op.drop_table('session')
-    op.drop_index('idx_recent_file_accessed', table_name='recent_file', postgresql_using='btree')
+    op.drop_index('idx_recent_files_accessed', table_name='recent_file', postgresql_using='btree')
     op.drop_table('recent_file')

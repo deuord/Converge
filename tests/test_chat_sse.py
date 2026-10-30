@@ -1,4 +1,4 @@
-# tests/test_chat_sse.py — /api/chat SSE 链路:帧序 / error 帧 code / 落库
+# tests/test_chat_sse.py — /api/v1/chat SSE 链路:帧序 / error 帧 code / 落库
 # LLM 用假流替换(monkeypatch),不发真实请求;库连不上自动跳过
 import json
 from types import SimpleNamespace
@@ -39,7 +39,7 @@ def _fake_stream_raising(exc):
 
 def test_new_session_frame_order(client, monkeypatch):
     monkeypatch.setattr("agent.runner.chat_stream", _fake_stream(["你好", "，世界"]))
-    r = client.post("/api/chat", json={"content": "hi"})
+    r = client.post("/api/v1/chat", json={"content": "hi"})
     assert r.status_code == 200
     assert r.headers["content-type"].startswith("text/event-stream")
     frames = _frames(r)
@@ -52,10 +52,10 @@ def test_new_session_frame_order(client, monkeypatch):
 def test_multi_turn_persisted_and_history_rebuilt(client, monkeypatch, db):
     seen: list = []
     monkeypatch.setattr("agent.runner.chat_stream", _fake_stream(["一答"], seen))
-    sid = _frames(client.post("/api/chat", json={"content": "第一问"}))[0]["session_id"]
+    sid = _frames(client.post("/api/v1/chat", json={"content": "第一问"}))[0]["session_id"]
 
     monkeypatch.setattr("agent.runner.chat_stream", _fake_stream(["二答"], seen))
-    frames = _frames(client.post("/api/chat", json={"content": "第二问", "session_id": sid}))
+    frames = _frames(client.post("/api/v1/chat", json={"content": "第二问", "session_id": sid}))
     assert frames[0] == {"type": "session", "session_id": sid}
 
     # 落库:四条消息按回合顺序
@@ -75,7 +75,7 @@ def test_multi_turn_persisted_and_history_rebuilt(client, monkeypatch, db):
 
 
 def test_missing_session_error_frame_has_404(client):
-    frames = _frames(client.post("/api/chat", json={"content": "hi", "session_id": "nope"}))
+    frames = _frames(client.post("/api/v1/chat", json={"content": "hi", "session_id": "nope"}))
     assert frames == [{"type": "error", "code": 404, "message": "session 不存在或已删除: nope"}]
 
 
@@ -85,14 +85,14 @@ def test_soft_deleted_session_error_frame_has_404(client, db):
     db.commit()
     store.delete_session(row.session_id)
     db.commit()
-    frames = _frames(client.post("/api/chat", json={"content": "hi", "session_id": row.session_id}))
+    frames = _frames(client.post("/api/v1/chat", json={"content": "hi", "session_id": row.session_id}))
     assert frames[0]["type"] == "error"
     assert frames[0]["code"] == 404
 
 
 def test_llm_failure_error_frame_has_502(client, monkeypatch):
     monkeypatch.setattr("agent.runner.chat_stream", _fake_stream_raising(RuntimeError("上游挂了")))
-    frames = _frames(client.post("/api/chat", json={"content": "hi"}))
+    frames = _frames(client.post("/api/v1/chat", json={"content": "hi"}))
     assert [f["type"] for f in frames] == ["session", "error"]
     assert frames[1]["code"] == 502
     assert "上游挂了" in frames[1]["message"]

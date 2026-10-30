@@ -28,9 +28,7 @@ async def chat_stream(messages, model=None, tools=None):
     mcfg = get_settings().get_model(model)
     # 重试/超时显式化(plan §1.2):429/5xx/连接错指数退避重试 3 次,400/401/403 等
     # 4xx 不重试(重试也没用);超时 120s,防上游假死把请求挂住
-    client = AsyncOpenAI(
-        api_key=mcfg.api_key, base_url=mcfg.base_url, max_retries=3, timeout=120.0
-    )
+    client = AsyncOpenAI(api_key=mcfg.api_key, base_url=mcfg.base_url, max_retries=3)
 
     # ---------------- create:对应 POST /v1/chat/completions 的请求体 ----------------
     # 常用参数(v1.0 用到的 + 之后会用到的,都在这认识一遍):
@@ -76,7 +74,9 @@ async def chat_stream(messages, model=None, tools=None):
         # 流末尾服务端会发一个 finish_reason 标记(stop/tool_calls/length),
         # runner 将来靠它判断"正常结束还是被截断"
         async for chunk in stream:
-            if not chunk.choices:  # usage 在末尾空 choices 的 chunk 上,v1.0 不统计 token,跳过
+            if (
+                not chunk.choices
+            ):  # usage 在末尾空 choices 的 chunk 上,v1.0 不统计 token,跳过
                 continue
             yield chunk.choices[0].delta  # 整个 delta 交给 runner 解析
 

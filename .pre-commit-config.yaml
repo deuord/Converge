@@ -1,0 +1,10 @@
+# pre-commit — commit 前自动跑 ruff(本地检查,不依赖 CI)
+# 一次性安装:uv run pre-commit install(写入 .git/hooks)
+# rev 与 pyproject 里 ruff>=0.17.3 对齐,升级 ruff 时这里同步改
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.17.3
+    hooks:
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]  # 能自动修的直接修(改完留在暂存区外),修不了的报错
+# pytest 不进 hook:要连库且慢,适合手动跑/将来接 CI,不适合卡在每次 commit
