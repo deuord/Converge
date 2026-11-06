@@ -44,9 +44,8 @@ class SessionService:
         return self.store.list_sessions(q)
 
     def list_messages(
-        self, session_id: str, q: PageQuery | None = None
-    ) -> list[Message] | tuple[list[Message], int]:
-        """会话历史:缺省 seq 升序(时间正序);seq 会话内唯一,不需要 tiebreaker"""
-        if q is not None:
-            q.order = parse_sort(q.sort, _MESSAGE_SORT, default=("seq", "asc"))
+        self, session_id: str, q: PageQuery
+    ) -> tuple[list[Message], int]:
+        """会话历史(分页):缺省 seq 升序(时间正序);seq 会话内唯一,不需要 tiebreaker"""
+        q.order = parse_sort(q.sort, _MESSAGE_SORT, default=("seq", "asc"))
         return self.store.list_messages(session_id, q)

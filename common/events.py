@@ -1,4 +1,5 @@
-# 事件类型:runner 与 renderer 之间的唯一契约(见 plan §1.5)
+# common/events.py — 事件契约:service 层(生产者)与 api/传输层(消费者)之间的唯一契约(见 plan §1.5)
+# 与 response.py 对称:response 定"HTTP 返回长什么样",events 定"事件长什么样"
 # pydantic BaseModel:Literal["chunk"] 约束 type 值写不错;SSE 序列化直接 model_dump()
 from typing import Literal
 

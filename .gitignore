@@ -16,5 +16,8 @@ config/models.yaml
 # Tooling caches
 .ruff_cache/
 
+# Runtime output (logs/)
+logs/
+
 # macOS
 .DS_Store

@@ -1,4 +1,5 @@
-# agent/runner.py — 编排层:一次用户输入 → 一串事件(见 plan §1.4 / §2.7)
+# service/chat_service.py — 对话业务层:一次用户输入 → 一串事件(见 plan §1.4 / §2.7)
+# 与 session_service 同层同级:业务逻辑都在 service/,api/ 只做协议转换
 # 传输无关:不 print、不碰任何传输层——CLI 和 HTTP/SSE 都是它的消费者
 # 断点续跑(resume_turn)、ReAct 工具循环随 v2.x 加;观测埋点(obs.log_event)v2.0 接入
 from collections.abc import AsyncIterator
@@ -6,10 +7,10 @@ from collections.abc import AsyncIterator
 import structlog
 from sqlalchemy.orm import Session as DbSession
 
-from agent.events import ChunkEvent, DoneEvent, ErrorEvent, Event
-from agent.session import Session
+from common.events import ChunkEvent, DoneEvent, ErrorEvent, Event
 from common.response import CODE_LLM_ERROR
 from llm.openai_compat import chat_stream
+from service.runtime import Session
 from store.session_store import SessionStore
 
 logger = structlog.get_logger(__name__)
@@ -28,7 +29,7 @@ async def run_turn(
     """一次回合:追加用户消息 → 流式调 LLM → 落库回复;过程中 yield 事件
 
     db:      SQLAlchemy 会话(来自 get_db / SessionLocal);store 只 flush,commit 由本函数负责
-    session: 进程内存的运行时会话(lock / messages 快照在这,见 agent/session.py)
+    session: 进程内存的运行时会话(lock / messages 快照在这,见 service/runtime.py)
     model:   models.yaml 里的模型别名,None 用默认模型(会话级切换见 plan §2.2)
     """
     async with session.lock:  # 同一会话串行:并发的第二个回合在此排队(锁持到本段流结束),见 plan §2.5

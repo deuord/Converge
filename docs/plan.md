@@ -60,11 +60,11 @@ mini-agent/
 ├── app/
 │   ├── __init__.py
 │   ├── cli.py                # 已砍:CLI 路线取消(见上方路线调整注)
-│   ├── agent/
-│   │   ├── __init__.py
-│   │   ├── events.py         # 事件类型(chunk/done/error),runner 与 renderer 的契约
-│   │   ├── session.py        # Session 数据结构:messages / pending / lock(落库走 store)
-│   │   └── runner.py         # 核心:收消息 → 调 LLM → yield 事件(禁止 print / 传输层调用)
+│   ├── common/
+│   │   └── events.py         # 事件类型(chunk/done/error),service 与传输层的契约
+│   ├── service/
+│   │   ├── chat_service.py   # 核心:收消息 → 调 LLM → yield 事件(禁止 print / 传输层调用)
+│   │   └── runtime.py        # 运行时 Session(lock / messages / pending)+ 进程内注册表
 │   ├── llm/
 │   │   ├── __init__.py
 │   │   └── openai_compat.py  # OpenAI 兼容流式调用(DeepSeek 走这个),直读 config;不设 base 抽象/factory(单 provider,避免过度设计)
@@ -76,7 +76,7 @@ mini-agent/
 │       ├── __init__.py
 │       ├── db.py             # PostgreSQL 连接层:engine + SessionLocal + get_db
 │       ├── model.py          # SQLAlchemy ORM 模型(Alembic autogenerate 的来源)
-│       └── session_store.py  # SessionStore:PostgreSQL 读写(历史/断点/TTL)
+│       └── session_store.py  # SessionStore:PostgreSQL 读写(历史/断点)
 ├── configs/
 │   └── models.yaml
 ├── migrations/               # Alembic 迁移(env.py + versions/,表结构变更唯一入口)
@@ -100,11 +100,11 @@ v2.0 新增 app/tools/(registry 注册中心 + 各工具模块,每个工具一�
 
 1.4 模块职责
 config/:pydantic-settings BaseSettings(settings.py)读 models.yaml + .env + env 覆写,类型安全,漏配启动报错;get_settings() 单例
-store/session_store.py:SessionStore,PostgreSQL + SQLAlchemy 实现,表结构由 Alembic 迁移管理;会话历史 / 断点 / TTL 全落库,重启不丢、多进程共享(动机:内存态多 worker 进程不共享、重启丢历史)
+store/session_store.py:SessionStore,PostgreSQL + SQLAlchemy 实现,表结构由 Alembic 迁移管理;会话历史 / 断点全落库,重启不丢、多进程共享(动机:内存态多 worker 进程不共享、重启丢历史)
 llm/:openai_compat.chat_stream(messages, model, cfg) -> AsyncIterator[str] 直读 config,不设抽象层/factory(单 provider)
-agent/events.py:事件数据类型(chunk / done / error),runner 与 renderer 之间的唯一契约;v2 扩 tool_call / confirm_request / ask_user 事件(confirm 与 ask_user 也是事件,不走回调,见 2.5),v3 扩 plan
-agent/session.py:Session 数据结构(messages, session_id, created_at, pending 断点, lock 会话锁);存储逻辑在 store/session_store.py,单例放 agent/store.py(被 api 路由引用)
-agent/runner.py:传输无关。run_turn 追加用户消息 → 跑 ReAct → yield 事件;需要用户输入时把断点写进 session.pending 并结束本段;resume_turn 从断点续跑。代码里不允许出现 print / 任何传输层调用
+common/events.py:事件数据类型(chunk / done / error),service 与传输层之间的唯一契约;v2 扩 tool_call / confirm_request / ask_user 事件(confirm 与 ask_user 也是事件,不走回调,见 2.5),v3 扩 plan
+service/runtime.py:Session 运行时数据结构(messages, session_id, created_at, pending 断点, lock 会话锁)+ get_or_create 进程内注册表;存储逻辑在 store/session_store.py
+service/chat_service.py:传输无关。run_turn 追加用户消息 → 跑 ReAct → yield 事件;需要用户输入时把断点写进 session.pending 并结束本段;resume_turn 从断点续跑。代码里不允许出现 print / 任何传输层调用
 cli.py(v1.0,已砍):CLI 路线取消,渲染层只做 FastAPI/SSE;其职责由 api/routes_chat.py 承接
 api/routes_chat.py(v1.1):HTTP + SSE 两个端点(发消息 / 提交回答)→ 调同一个 runner → 事件转 SSE data: 推回
 obs.py(v2.0):log_event(type, **fields) 写 logs/metrics.jsonl + 内存计数,/api/metrics 聚合(见 1.6)
@@ -264,7 +264,7 @@ v2.3	多步串联联调	2.9 多步串联场景跑通（三场景需要 v3 工具
 v2.4	收尾:PostgreSQL 落库 recent_files + /api/metrics 聚合端点	重启后最近访问可查;/api/metrics 有数据
 2.2 新增能力
 ReAct 主循环
-agent/runner.py 改造:LLM 决策 → 调 tool → 观察结果 → 再决策 → 直到完成
+service/chat_service.py 改造:LLM 决策 → 调 tool → 观察结果 → 再决策 → 直到完成
 终止条件:LLM 不再返回 tool_calls(给最终回复)或达到 MAX_STEPS(硬上限,防死循环;从配置读,默认 6,agent_max_steps)
 中间步骤(tool_call)实时推前端,可见执行过程
 文件工具
@@ -305,8 +305,8 @@ chat_stream(messages, model=None) 的 model 参数已就位;run_turn 加 model �
 落地:v2.4 只做两条取消路径(CLI Ctrl+C / SSE abort)的端到端验证(见 v2.4 任务4),能力已随 SSE 天然具备;前端"停止"按钮放 v3.2
 2.3 目录新增
 app/
-├── agent/
-│   └── runner.py              # 改造:单次调 LLM 改为 ReAct 循环
+├── service/
+│   └── chat_service.py        # 改造:单次调 LLM 改为 ReAct 循环
 ├── tools/
 │   ├── __init__.py
 │   ├── registry.py            # 工具注册中心(v3 文档工具也用这个)
@@ -660,7 +660,7 @@ v2.3:多步串联
 v2.4:收尾
 1a. 存储基建(已就位):docker-compose 起 PostgreSQL 18(宿主机端口 5433)+ store/db.py(engine + SessionLocal + get_db,连接池复用;同步 ORM 调用照旧丢 to_thread,不卡事件循环)+ Alembic 初始化(migrations/ + alembic.ini)。表结构未定义,暂未接调用方
 1b. recent_files 落库:store/model.py 定义 ORM 模型 + env.py 挂 target_metadata → alembic autogenerate / upgrade head 建表 → file.py 的 read/write/edit 写表、list_recent_files 查表(工具契约/description 不变)
-1c. SessionStore 落 PostgreSQL(重启不丢,断点可续):messages 独立 messages 表(seq 排序,支持分页/编辑/搜索),pending JSONB 存 sessions,TTL 存 expires_at,append_message 写 messages 表
+1c. SessionStore 落 PostgreSQL(重启不丢,断点可续):messages 独立 messages 表(seq 排序,支持分页/编辑/搜索),pending JSONB 存 sessions,append_message 写 messages 表
 
 GET /api/metrics:聚合内存计数(会话数、回合数、tool_call 数、错误数、LLM 累计 token、平均延迟) + jsonl 落地检查
 
@@ -900,7 +900,7 @@ v5.1	打包分发:Windows + macOS 安装包	安装包可装、可跑
 5.2 新增能力
 Tauri 壳:内嵌 Web 前端(前端代码原样复用),主进程拉起本地 FastAPI 后端子进程,窗口连 localhost WS
 打包:打包为 Windows / macOS 安装包,后端 Python 一并打进资源目录
-三端共用 runner:CLI / Web / 桌面 app 调同一套 agent/runner + tools + store,后端零改动
+三端共用 runner:CLI / Web / 桌面 app 调同一套 service/chat_service + tools + store,后端零改动
 5.3 目录新增
 desktop/                   # Tauri 项目(壳 + 打包配置)
 ├── src/                   # 前端入口(引用 web/ 构建产物)

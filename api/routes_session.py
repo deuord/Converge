@@ -1,8 +1,8 @@
-# api/router_session.py — 会话管理 v1.2:新建 / 列表(分页) / 历史(分页) / 软删(见 plan §1.7)
+# api/routes_session.py — 会话管理 v1.2:新建 / 列表(分页) / 历史(分页) / 软删(见 plan §1.7)
 # 本层只做协议转换:收参 → SessionService → out schema → ok() 信封;
 # 业务规则(sort 白名单/缺省排序/不存在语义)都在 service 层
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Any
 
 import structlog
 from fastapi import APIRouter, Depends
@@ -32,7 +32,7 @@ class SessionOut(BaseModel):
     title: str | None
     model: str | None
     # pending:回合断点,前端靠它渲染"待确认"状态;None = 无断点
-    pending: dict | None
+    pending: dict[str, Any] | None
     created_at: datetime
     updated_at: datetime
 
@@ -43,7 +43,7 @@ class MessageOut(BaseModel):
     seq: int
     role: str
     content: str | None
-    tool_calls: list | None
+    tool_calls: list[Any] | None
     tool_call_id: str | None
     created_at: datetime
 

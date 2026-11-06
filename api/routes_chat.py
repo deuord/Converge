@@ -1,5 +1,5 @@
-# api/routes_chat.py — HTTP + SSE:收消息 → 调同一个 runner → 事件转 SSE 推回(见 plan §1.4)
-# 本层只做协议转换,不写业务:业务都在 agent/runner.py,CLI/Web 之外将来加桌面端也是调它
+# api/routes_chat.py — HTTP + SSE:收消息 → 调 service 层 → 事件转 SSE 推回(见 plan §1.4)
+# 本层只做协议转换,不写业务:业务都在 service/chat_service.py,CLI/Web 之外将来加桌面端也是调它
 import json
 from typing import Annotated
 
@@ -9,10 +9,10 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from agent.events import ErrorEvent
-from agent.runner import run_turn
-from agent.store import get_or_create
+from common.events import ErrorEvent
 from common.response import CODE_INTERNAL_ERROR, CODE_NOT_FOUND
+from service.chat_service import run_turn
+from service.runtime import get_or_create
 from service.session_service import SessionService
 from store.db import get_db
 
@@ -51,7 +51,7 @@ async def _stream(req: ChatRequest, db: Session):
                 return
         else:
             row = svc.create_session()
-        session = get_or_create(row.session_id)  # 拿运行时状态袋(锁/快照在这,见 agent/session.py)
+        session = get_or_create(row.session_id)  # 拿运行时状态袋(锁/快照在这,见 service/runtime.py)
 
         yield _sse({"type": "session", "session_id": row.session_id})
         async for ev in run_turn(db, session, req.content, model=req.model):

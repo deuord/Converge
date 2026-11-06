@@ -32,7 +32,7 @@ class PageQuery:
     page: int
     page_size: int
     sort: str | None = None
-    order: list | None = None
+    order: list[Any] | None = None
 
 
 def page_query(

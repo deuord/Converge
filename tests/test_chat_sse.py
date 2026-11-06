@@ -38,7 +38,7 @@ def _fake_stream_raising(exc):
 
 
 def test_new_session_frame_order(client, monkeypatch):
-    monkeypatch.setattr("agent.runner.chat_stream", _fake_stream(["你好", "，世界"]))
+    monkeypatch.setattr("service.chat_service.chat_stream", _fake_stream(["你好", "，世界"]))
     r = client.post("/api/v1/chat", json={"content": "hi"})
     assert r.status_code == 200
     assert r.headers["content-type"].startswith("text/event-stream")
@@ -51,10 +51,10 @@ def test_new_session_frame_order(client, monkeypatch):
 
 def test_multi_turn_persisted_and_history_rebuilt(client, monkeypatch, db):
     seen: list = []
-    monkeypatch.setattr("agent.runner.chat_stream", _fake_stream(["一答"], seen))
+    monkeypatch.setattr("service.chat_service.chat_stream", _fake_stream(["一答"], seen))
     sid = _frames(client.post("/api/v1/chat", json={"content": "第一问"}))[0]["session_id"]
 
-    monkeypatch.setattr("agent.runner.chat_stream", _fake_stream(["二答"], seen))
+    monkeypatch.setattr("service.chat_service.chat_stream", _fake_stream(["二答"], seen))
     frames = _frames(client.post("/api/v1/chat", json={"content": "第二问", "session_id": sid}))
     assert frames[0] == {"type": "session", "session_id": sid}
 
@@ -92,10 +92,10 @@ def test_soft_deleted_session_error_frame_has_404(client, db):
 
 def test_first_turn_sets_title(client, monkeypatch, db):
     # 首轮给会话起标题(第一条用户消息截断);第二轮不改标题
-    monkeypatch.setattr("agent.runner.chat_stream", _fake_stream(["好的"]))
+    monkeypatch.setattr("service.chat_service.chat_stream", _fake_stream(["好的"]))
     sid = _frames(client.post("/api/v1/chat", json={"content": "帮我看看这个bug\n第二行不参与"}))[0]["session_id"]
 
-    monkeypatch.setattr("agent.runner.chat_stream", _fake_stream(["再答"]))
+    monkeypatch.setattr("service.chat_service.chat_stream", _fake_stream(["再答"]))
     client.post("/api/v1/chat", json={"content": "第二问", "session_id": sid})
 
     row = SessionStore(db).get_session(sid)
@@ -103,7 +103,7 @@ def test_first_turn_sets_title(client, monkeypatch, db):
 
 
 def test_llm_failure_error_frame_has_502(client, monkeypatch):
-    monkeypatch.setattr("agent.runner.chat_stream", _fake_stream_raising(RuntimeError("上游挂了")))
+    monkeypatch.setattr("service.chat_service.chat_stream", _fake_stream_raising(RuntimeError("上游挂了")))
     frames = _frames(client.post("/api/v1/chat", json={"content": "hi"}))
     assert [f["type"] for f in frames] == ["session", "error"]
     assert frames[1]["code"] == 502

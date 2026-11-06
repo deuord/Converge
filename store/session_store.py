@@ -26,7 +26,7 @@ class SessionStore:
         self.db.flush()
         return row
 
-    def get_session(self, session_id: str) -> Session:
+    def get_session(self, session_id: str) -> Session | None:
         """根据 session_id 获取会话,返回 ORM 对象(未 flush)"""
         return self.db.execute(
             select(Session).where(
