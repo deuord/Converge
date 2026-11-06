@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from api.router_session import router as session_router
 from api.routes_chat import router as chat_router
 from api.routes_health import router as health_router
 from common.logging import RequestLogMiddleware, setup_logging
@@ -27,3 +28,4 @@ app.add_middleware(RequestLogMiddleware)
 register_exception_handlers(app)
 app.include_router(health_router)
 app.include_router(chat_router)
+app.include_router(session_router)

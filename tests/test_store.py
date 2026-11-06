@@ -2,6 +2,7 @@
 # 测试产生的数据用完即软删,不留活数据
 import pytest
 
+from common.pagination import PageQuery
 from store.session_store import SessionStore
 
 
@@ -47,6 +48,7 @@ def test_soft_delete_hides_session(db):
     store.delete_session(row.session_id)
     db.commit()
     assert store.get_session(row.session_id) is None
-    assert row.session_id not in [s.session_id for s in store.list_sessions()]
+    items, _total = store.list_sessions(PageQuery(page=1, page_size=100))
+    assert row.session_id not in [s.session_id for s in items]
     with pytest.raises(ValueError, match="session 不存在"):
         store.delete_session(row.session_id)  # 删两次也要拦住

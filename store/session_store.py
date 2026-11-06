@@ -7,6 +7,8 @@ from datetime import UTC, datetime
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session as DbSession
 
+from common.pagination import PageQuery, paginate
+
 from .model import Message, Session
 
 
@@ -44,13 +46,16 @@ class SessionStore:
         row.deleted_at = datetime.now(UTC)
         self.db.flush()
 
-    def list_sessions(self) -> list[Session]:
-        """返回所有会话,返回 ORM 对象列表(未 flush)"""
-        return self.db.execute(
-            select(Session)
-            .where(Session.deleted_at.is_(None))
-            .order_by(Session.updated_at.desc())
-        ).scalars().all()
+    def list_sessions(self, q: PageQuery, *filters) -> tuple[list[Session], int]:
+        """通用分页查询:PageQuery 整个传,store 只管执行,业务逻辑(service 层)不在这
+
+        filters: 额外 where 条件(软删过滤是本层 invariant,已内置,不用传)
+        排序:q.order(service 层 parse_sort 产出的 order_by 列);直接构造 PageQuery
+        不带 order 时用 updated_at 降序兜底(分页不排序结果不稳定)
+        """
+        stmt = select(Session).where(Session.deleted_at.is_(None), *filters)
+        stmt = stmt.order_by(*(q.order or [Session.updated_at.desc()]))
+        return paginate(self.db, stmt, q)
 
     def save_pending(self, session_id: str, pending: dict | None):
         """根据 session_id 保存会话的 pending 状态"""
@@ -80,14 +85,17 @@ class SessionStore:
         2. 锁拿到后再查 MAX(seq),+1 写入
         message 表的 (session_id, seq) 唯一约束是第二道保险,即使锁失效也会报错而不是写重
         """
-        # 第 1 步:锁 session 行,顺便校验会话存在且未删除
-        exists = self.db.execute(
-            select(Session.id)
+        # 第 1 步:锁 session 行,顺便校验会话存在且未删除;锁住时顺手 bump updated_at ——
+        # 会话列表按 updated_at 排序的语义是"最后有消息的时间",每次追加消息都要刷新,
+        # 否则聊过天的会话在列表里不会浮到最前(正常聊天只插 message 行,不碰 session 行)
+        row = self.db.execute(
+            select(Session)
             .where(Session.session_id == session_id, Session.deleted_at.is_(None))
             .with_for_update()
-        ).scalar_one_or_none()
-        if exists is None:
+        ).scalars().first()
+        if row is None:
             raise ValueError(f"session 不存在或已删除: {session_id}")
+        row.updated_at = datetime.now(UTC)
 
         # 第 2 步:锁内取当前最大 seq
         max_seq = self.db.execute(
@@ -106,10 +114,19 @@ class SessionStore:
         self.db.flush()
         return row
 
-    def list_messages(self, session_id: str) -> list[Message]:
-        """根据 session_id 获取会话的所有消息,返回 ORM 对象列表(未 flush)"""
-        return self.db.execute(
-            select(Message)
-            .where(Message.session_id == session_id, Message.deleted_at.is_(None))
-            .order_by(Message.seq)
-        ).scalars().all()
+    def list_messages(
+        self, session_id: str, q: PageQuery | None = None, *filters
+    ) -> list[Message] | tuple[list[Message], int]:
+        """查会话消息。q=None 全量返回 list[Message] —— runner 拼上下文用,一条都不能少;
+        q 给了分页返回 (当前页 items, 总条数),历史拉取接口用
+
+        filters 语义同 list_sessions;seq 升序是会话的固有顺序,q.order 缺省时按它来
+        (service 层 list_messages 会在传 q 前填好 q.order)
+        """
+        stmt = select(Message).where(
+            Message.session_id == session_id, Message.deleted_at.is_(None), *filters
+        )
+        stmt = stmt.order_by(*(q.order if q and q.order else [Message.seq]))
+        if q is None:
+            return self.db.execute(stmt).scalars().all()
+        return paginate(self.db, stmt, q)
