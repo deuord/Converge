@@ -15,6 +15,13 @@ from store.session_store import SessionStore
 logger = structlog.get_logger(__name__)
 
 
+def _session_title(text: str) -> str:
+    """列表标题 = 第一条用户消息的截断(业界默认做法,ChatGPT 同款);
+    取首行去空白,30 字符封顶(列宽 64,中文不会截半——Python 按字符切)"""
+    line = text.strip().splitlines()[0] if text.strip() else ""
+    return line[:30]
+
+
 async def run_turn(
     db: DbSession, session: Session, user_text: str, model: str | None = None
 ) -> AsyncIterator[Event]:
@@ -37,6 +44,12 @@ async def run_turn(
             {"role": m.role, "content": m.content or ""}
             for m in store.list_messages(session.session_id)
         ]
+
+        # 3. 首轮给会话起标题:列表展示"一段话"而不是 uuid(见 plan §1.7);
+        #    LLM 调用前落库,首轮 LLM 挂了标题也在。升级 LLM 生成标题只换这里
+        if len(session.messages) == 1:
+            store.save_title(session.session_id, _session_title(user_text))
+            db.commit()
 
         content = ""  # 本段已生成的正文,边收边记(被掐断时靠它落库)
         completed = False

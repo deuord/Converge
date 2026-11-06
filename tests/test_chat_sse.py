@@ -90,6 +90,18 @@ def test_soft_deleted_session_error_frame_has_404(client, db):
     assert frames[0]["code"] == 404
 
 
+def test_first_turn_sets_title(client, monkeypatch, db):
+    # 首轮给会话起标题(第一条用户消息截断);第二轮不改标题
+    monkeypatch.setattr("agent.runner.chat_stream", _fake_stream(["好的"]))
+    sid = _frames(client.post("/api/v1/chat", json={"content": "帮我看看这个bug\n第二行不参与"}))[0]["session_id"]
+
+    monkeypatch.setattr("agent.runner.chat_stream", _fake_stream(["再答"]))
+    client.post("/api/v1/chat", json={"content": "第二问", "session_id": sid})
+
+    row = SessionStore(db).get_session(sid)
+    assert row.title == "帮我看看这个bug"  # 只取首行
+
+
 def test_llm_failure_error_frame_has_502(client, monkeypatch):
     monkeypatch.setattr("agent.runner.chat_stream", _fake_stream_raising(RuntimeError("上游挂了")))
     frames = _frames(client.post("/api/v1/chat", json={"content": "hi"}))

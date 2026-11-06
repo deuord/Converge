@@ -69,6 +69,18 @@ class SessionStore:
         row.pending = pending
         self.db.flush()
 
+    def save_title(self, session_id: str, title: str):
+        """保存会话标题(首轮用户消息截断,生成规则在 runner,见 plan §1.7)"""
+        row = self.db.execute(
+            select(Session).where(
+                Session.session_id == session_id, Session.deleted_at.is_(None)
+            )
+        ).scalars().first()
+        if row is None:
+            raise ValueError(f"session 不存在或已删除: {session_id}")
+        row.title = title
+        self.db.flush()
+
     def append_message(
         self,
         session_id: str,

@@ -28,6 +28,8 @@ class SessionOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     session_id: str
+    # 列表展示用:首轮用户消息截断生成;null = 还没聊过,前端兜底"新对话"
+    title: str | None
     model: str | None
     # pending:回合断点,前端靠它渲染"待确认"状态;None = 无断点
     pending: dict | None

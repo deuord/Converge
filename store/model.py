@@ -93,6 +93,12 @@ class Session(Base, TimestampMixin):
     # nullable=True 允许空 JSONB
     pending: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
+    # 会话标题:首轮用户消息截断生成(runner),列表展示用;None = 还没聊过,前端兜底"新对话"
+    # 以后升级 LLM 生成标题只换赋值处,列不用动
+    title: Mapped[str | None] = mapped_column(
+        String(64), nullable=True, comment="会话标题,首轮用户消息截断生成;NULL=尚未生成"
+    )
+
     # 会话级模型切换:null 表示走 config/models.yaml 的默认
     model: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
